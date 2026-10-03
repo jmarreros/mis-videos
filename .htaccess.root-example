@@ -1,0 +1,7 @@
+# Úsalo SOLO si tu hosting no permite apuntar el dominio a la carpeta public/.
+# Renómbralo a .htaccess en la raíz del proyecto: todas las peticiones se
+# redirigen a public/, de modo que .env, storage/ y el resto quedan inaccesibles.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>

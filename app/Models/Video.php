@@ -14,7 +14,7 @@ class Video extends Model
     use HasFactory, HasUlids;
 
     protected $fillable = [
-        'title', 'folder_id', 'path', 'original_name', 'mime',
+        'title', 'folder_id', 'vimeo_id', 'path', 'original_name', 'mime',
         'size', 'duration', 'width', 'height', 'thumbnail_path',
     ];
 

@@ -9,11 +9,14 @@ use App\Models\Video;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class UploadTest extends TestCase
 {
     use RefreshDatabase;
+
+    private const MIB = 1024 * 1024;
 
     protected function setUp(): void
     {
@@ -22,28 +25,41 @@ class UploadTest extends TestCase
         $this->actingAs(User::factory()->create());
     }
 
-    private function chunk(string $contents): UploadedFile
+    private function putPart(string $uuid, int $number, string $contents): TestResponse
     {
-        return UploadedFile::fake()->createWithContent('chunk', $contents);
+        $url = $this->postJson(route('uploads.parts.sign', ['upload' => $uuid, 'number' => $number]))->assertOk()->json('url');
+
+        return $this->call('PUT', $url, server: ['HTTP_ACCEPT' => 'application/json', 'CONTENT_TYPE' => 'application/octet-stream'], content: $contents);
     }
 
-    public function test_a_video_is_uploaded_in_chunks_and_saved(): void
+    private function init(int $size, string $name = 'clip.mp4'): string
+    {
+        return $this->postJson(route('uploads.init'), ['name' => $name, 'size' => $size, 'mime' => 'video/mp4'])->assertCreated()->json('uuid');
+    }
+
+    public function test_part_size_respects_s3_limits(): void
+    {
+        $this->assertSame(10 * self::MIB, Upload::partSizeFor(5 * self::MIB));
+        // 200 GB must fit in 10,000 parts.
+        $this->assertLessThanOrEqual(Upload::MAX_PARTS, ceil(200e9 / Upload::partSizeFor(200_000_000_000)));
+    }
+
+    public function test_a_video_is_uploaded_in_parts_and_saved(): void
     {
         $folder = Folder::factory()->create();
-        $parts = ['aaaa', 'bbbb', 'cc'];
+        $size = 10 * self::MIB + 6;
+        $first = str_repeat('a', 10 * self::MIB);
 
-        $uuid = $this->postJson(route('uploads.init'), ['name' => 'Vacaciones.MP4', 'size' => 10, 'mime' => 'video/mp4'])
-            ->assertCreated()
-            ->assertJsonPath('received_bytes', 0)
-            ->json('uuid');
+        $uuid = $this->init($size, 'Vacaciones.MP4');
+        $this->getJson(route('uploads.show', $uuid))
+            ->assertJsonPath('part_size', 10 * self::MIB)
+            ->assertJsonPath('part_count', 2)
+            ->assertJsonPath('parts', []);
 
-        $offset = 0;
-        foreach ($parts as $part) {
-            $this->post(route('uploads.chunk', $uuid), ['offset' => $offset, 'chunk' => $this->chunk($part)], ['Accept' => 'application/json'])
-                ->assertOk()
-                ->assertJsonPath('received_bytes', $offset + strlen($part));
-            $offset += strlen($part);
-        }
+        // Parts may arrive in any order.
+        $this->putPart($uuid, 2, 'bbbbbb')->assertOk();
+        $this->putPart($uuid, 1, $first)->assertOk();
+        $this->getJson(route('uploads.show', $uuid))->assertJsonCount(2, 'parts');
 
         $response = $this->post(route('uploads.complete', $uuid), [
             'title' => 'Mis vacaciones',
@@ -57,29 +73,33 @@ class UploadTest extends TestCase
         $video = Video::firstOrFail();
         $this->assertSame('Mis vacaciones', $video->title);
         $this->assertSame($folder->id, $video->folder_id);
-        $this->assertSame(10, $video->size);
+        $this->assertSame($size, $video->size);
         $this->assertStringEndsWith('.mp4', $video->path);
-        $this->assertSame('aaaabbbbcc', Storage::get($video->path));
-        Storage::assertExists($video->thumbnail_path);
+        $this->assertSame($first.'bbbbbb', Storage::disk('local')->get($video->path));
+        Storage::disk('local')->assertExists($video->thumbnail_path);
+        Storage::disk('local')->assertMissing('uploads/'.$uuid);
         $this->assertSame(0, Upload::count());
         $response->assertJsonPath('url', route('videos.show', $video));
     }
 
-    public function test_a_chunk_with_the_wrong_offset_is_rejected(): void
+    public function test_a_truncated_part_is_rejected(): void
     {
-        $uuid = $this->postJson(route('uploads.init'), ['name' => 'a.mp4', 'size' => 8, 'mime' => 'video/mp4'])->json('uuid');
-        $this->post(route('uploads.chunk', $uuid), ['offset' => 0, 'chunk' => $this->chunk('aaaa')], ['Accept' => 'application/json']);
+        $uuid = $this->init(10 * self::MIB + 6);
 
-        $this->post(route('uploads.chunk', $uuid), ['offset' => 0, 'chunk' => $this->chunk('aaaa')], ['Accept' => 'application/json'])
-            ->assertStatus(409)
-            ->assertJsonPath('received_bytes', 4);
+        $this->putPart($uuid, 2, 'bbb')->assertStatus(422);
+    }
 
-        $this->getJson(route('uploads.show', $uuid))->assertJsonPath('received_bytes', 4);
+    public function test_part_numbers_out_of_range_are_rejected(): void
+    {
+        $uuid = $this->init(100);
+
+        $this->postJson(route('uploads.parts.sign', ['upload' => $uuid, 'number' => 2]))->assertStatus(422);
     }
 
     public function test_an_incomplete_upload_cannot_be_completed(): void
     {
-        $uuid = $this->postJson(route('uploads.init'), ['name' => 'a.mp4', 'size' => 8, 'mime' => 'video/mp4'])->json('uuid');
+        $uuid = $this->init(10 * self::MIB + 6);
+        $this->putPart($uuid, 2, 'bbbbbb');
 
         $this->postJson(route('uploads.complete', $uuid), ['title' => 'x'])->assertStatus(409);
         $this->assertSame(0, Video::count());
@@ -95,15 +115,26 @@ class UploadTest extends TestCase
         $this->postJson(route('uploads.init'), ['name' => 'clip.mkv', 'size' => 8, 'mime' => ''])->assertCreated();
     }
 
+    public function test_cancelling_an_upload_removes_its_parts(): void
+    {
+        $uuid = $this->init(100);
+        $this->putPart($uuid, 1, str_repeat('x', 100));
+
+        $this->deleteJson(route('uploads.destroy', $uuid))->assertNoContent();
+
+        Storage::disk('local')->assertMissing('uploads/'.$uuid);
+        $this->assertSame(0, Upload::count());
+    }
+
     public function test_stale_uploads_are_pruned(): void
     {
-        $upload = Upload::create(['original_name' => 'a.mp4', 'size' => 10, 'mime' => 'video/mp4']);
-        Storage::put($upload->partPath(), 'abc');
-        Upload::whereKey($upload->uuid)->update(['updated_at' => now()->subDays(2)]);
+        $uuid = $this->init(100);
+        $this->putPart($uuid, 1, 'abc');
+        Upload::whereKey($uuid)->update(['updated_at' => now()->subDays(2)]);
 
         $this->artisan('uploads:prune')->assertSuccessful();
 
         $this->assertSame(0, Upload::count());
-        Storage::assertMissing($upload->partPath());
+        Storage::disk('local')->assertMissing('uploads/'.$uuid);
     }
 }

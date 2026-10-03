@@ -21,7 +21,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('upload', fn (Request $request) => Inertia::render('upload', ['folderId' => $request->integer('folder') ?: null]))->name('upload');
     Route::post('uploads', [UploadController::class, 'init'])->name('uploads.init');
     Route::get('uploads/{upload}', [UploadController::class, 'show'])->name('uploads.show');
-    Route::post('uploads/{upload}/chunk', [UploadController::class, 'chunk'])->name('uploads.chunk');
+    Route::post('uploads/{upload}/parts/{number}/sign', [UploadController::class, 'sign'])->whereNumber('number')->name('uploads.parts.sign');
+    Route::put('uploads/{upload}/parts/{number}', [UploadController::class, 'storePart'])->whereNumber('number')->name('uploads.parts.store');
     Route::post('uploads/{upload}/complete', [UploadController::class, 'complete'])->name('uploads.complete');
     Route::delete('uploads/{upload}', [UploadController::class, 'destroy'])->name('uploads.destroy');
 

@@ -51,6 +51,7 @@ export default function VideoShow({ video, ancestors, related }: Props) {
                         src={video.stream_url}
                         poster={video.thumbnail_url ?? undefined}
                         controls
+                        crossOrigin="anonymous"
                         autoPlay
                         playsInline
                         preload="metadata"
@@ -118,7 +119,7 @@ export default function VideoShow({ video, ancestors, related }: Props) {
                                 <Image /> Miniatura
                             </Button>
                             <Button variant="secondary" size="icon" asChild title="Descargar">
-                                <a href={video.stream_url} download={video.original_name}>
+                                <a href={`${video.stream_url}?download=1`}>
                                     <Download />
                                 </a>
                             </Button>

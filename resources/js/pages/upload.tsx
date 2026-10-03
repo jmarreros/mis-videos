@@ -156,6 +156,22 @@ export default function UploadPage({ folderId }: { folderId: number | null }) {
         setItems((prev) => prev.filter((i) => i.id !== id));
     };
 
+    // Large files (e.g. a MOV with its index at the end) can take a while to
+    // expose their first frame; give the thumbnail a few seconds to arrive.
+    const waitForThumbnail = async (id: string) => {
+        const deadline = Date.now() + 8000;
+        while (Date.now() < deadline) {
+            const item = itemsRef.current.find((i) => i.id === id);
+            if (!item || item.thumbBlob || item.unsupported) return;
+            const pending = captures.current.get(id);
+            if (pending) {
+                await pending;
+                return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+    };
+
     const start = async (id: string) => {
         const controller = new AbortController();
         controllers.current.set(id, controller);
@@ -167,7 +183,7 @@ export default function UploadPage({ folderId }: { folderId: number | null }) {
                 signal: controller.signal,
                 onProgress: ({ loaded, speed }) => update(id, { loaded, speed }),
                 getCompleteData: async () => {
-                    await captures.current.get(id);
+                    await waitForThumbnail(id);
                     const item = itemsRef.current.find((i) => i.id === id)!;
                     return {
                         title: item.title.trim() || item.file.name,

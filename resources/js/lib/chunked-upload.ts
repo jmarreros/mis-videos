@@ -1,11 +1,17 @@
-import { HttpError, request } from '@/lib/http';
+import { HttpError, request, xsrfToken } from '@/lib/http';
 import { type Video } from '@/types';
 
 interface UploadState {
     uuid: string;
     size: number;
-    received_bytes: number;
-    chunk_size: number;
+    part_size: number;
+    part_count: number;
+    parts: { number: number; size: number }[];
+}
+
+interface PartTarget {
+    url: string;
+    headers: Record<string, string>;
 }
 
 export interface UploadProgress {
@@ -28,11 +34,12 @@ interface Options {
     file: File;
     signal: AbortSignal;
     onProgress: (progress: UploadProgress) => void;
-    /** Called once all bytes are on the server; returns the metadata to save. */
+    /** Called once all bytes are stored; returns the metadata to save. */
     getCompleteData: () => CompleteData | Promise<CompleteData>;
 }
 
 const MAX_RETRIES = 5;
+const CONCURRENCY = 3;
 
 function storageKey(file: File): string {
     return `upload:${file.name}:${file.size}:${file.lastModified}`;
@@ -68,69 +75,109 @@ async function startOrResume(file: File, signal: AbortSignal): Promise<UploadSta
         }
     }
 
-    const state = await request<UploadState>(
-        'POST',
-        route('uploads.init'),
-        { name: file.name, size: file.size, mime: file.type || null },
-        signal,
-    );
+    const state = await request<UploadState>('POST', route('uploads.init'), { name: file.name, size: file.size, mime: file.type || null }, signal);
     safeStorage(() => localStorage.setItem(key, state.uuid));
 
     return state;
 }
 
-/** Bytes already on the server for this file from a previous (interrupted) session. */
+/** Bytes already stored for this file by a previous (interrupted) session. */
 export async function resumableBytes(file: File): Promise<number> {
     const uuid = safeStorage(() => localStorage.getItem(storageKey(file)));
     if (!uuid) return 0;
     try {
         const state = await request<UploadState>('GET', route('uploads.show', uuid));
-        return state.received_bytes;
+        return state.parts.reduce((sum, part) => sum + part.size, 0);
     } catch {
         return 0;
     }
 }
 
+/**
+ * PUTs a part to its target URL: a presigned S3 URL (cross-origin, no extra
+ * headers allowed) or this server when the media disk is local.
+ */
+function putPart(target: PartTarget, body: Blob, signal: AbortSignal, onProgress: (loaded: number) => void): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', target.url);
+        Object.entries(target.headers).forEach(([name, value]) => xhr.setRequestHeader(name, value));
+        if (new URL(target.url, location.href).origin === location.origin) {
+            xhr.setRequestHeader('X-XSRF-TOKEN', xsrfToken());
+            xhr.setRequestHeader('Accept', 'application/json');
+        }
+
+        const abort = () => xhr.abort();
+        signal.addEventListener('abort', abort);
+
+        xhr.upload.onprogress = (event) => onProgress(event.loaded);
+        xhr.onload = () => {
+            signal.removeEventListener('abort', abort);
+            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            else reject(new HttpError(xhr.status, { message: `Error al subir la parte (${xhr.status})` }));
+        };
+        xhr.onerror = () => {
+            signal.removeEventListener('abort', abort);
+            reject(new HttpError(0, { message: 'Error de red al subir. Si usas S3, revisa la configuración CORS del bucket.' }));
+        };
+        xhr.onabort = () => reject(new DOMException('Aborted', 'AbortError'));
+
+        xhr.send(body);
+    });
+}
+
 export async function uploadVideo({ file, signal, onProgress, getCompleteData }: Options): Promise<{ video: Video; url: string }> {
-    let state = await startOrResume(file, signal);
-    let offset = state.received_bytes;
+    const state = await startOrResume(file, signal);
+
+    const done = new Set(state.parts.map((part) => part.number));
+    let completedBytes = state.parts.reduce((sum, part) => sum + part.size, 0);
+    const inFlight = new Map<number, number>();
+    const pending = Array.from({ length: state.part_count }, (_, i) => i + 1).filter((number) => !done.has(number));
+
+    const startedAt = performance.now();
+    const resumedBytes = completedBytes;
     let speed = 0;
 
-    onProgress({ loaded: offset, total: file.size, speed });
+    const report = () => {
+        const loaded = completedBytes + [...inFlight.values()].reduce((sum, bytes) => sum + bytes, 0);
+        const seconds = (performance.now() - startedAt) / 1000;
+        if (seconds > 0.5) speed = (loaded - resumedBytes) / seconds;
+        onProgress({ loaded: Math.min(loaded, file.size), total: file.size, speed });
+    };
+    report();
 
-    while (offset < file.size) {
-        const end = Math.min(offset + state.chunk_size, file.size);
-        const form = new FormData();
-        form.append('offset', String(offset));
-        form.append('chunk', file.slice(offset, end), 'chunk');
-
-        const started = performance.now();
+    const uploadPart = async (number: number) => {
+        const start = (number - 1) * state.part_size;
+        const body = file.slice(start, Math.min(start + state.part_size, file.size));
 
         for (let attempt = 0; ; attempt++) {
             try {
-                state = await request<UploadState>('POST', route('uploads.chunk', state.uuid), form, signal);
+                const target = await request<PartTarget>('POST', route('uploads.parts.sign', { upload: state.uuid, number }), undefined, signal);
+                await putPart(target, body, signal, (loaded) => {
+                    inFlight.set(number, loaded);
+                    report();
+                });
                 break;
             } catch (error) {
+                inFlight.delete(number);
                 if (signal.aborted) throw error;
-                // The server tells us where it actually is; continue from there.
-                if (error instanceof HttpError && error.status === 409 && typeof error.body.received_bytes === 'number') {
-                    state = { ...state, received_bytes: error.body.received_bytes };
-                    break;
-                }
-                if (attempt >= MAX_RETRIES || (error instanceof HttpError && error.status < 500 && error.status !== 429)) {
-                    throw error;
-                }
+                const retryable = !(error instanceof HttpError) || error.status === 0 || error.status >= 500 || error.status === 429 || error.status === 403;
+                if (attempt >= MAX_RETRIES || !retryable) throw error;
                 await sleep(1000 * 2 ** attempt, signal);
             }
         }
 
-        const seconds = (performance.now() - started) / 1000;
-        const instant = (state.received_bytes - offset) / Math.max(seconds, 0.001);
-        speed = speed ? speed * 0.7 + instant * 0.3 : instant;
-        offset = state.received_bytes;
+        inFlight.delete(number);
+        completedBytes += body.size;
+        report();
+    };
 
-        onProgress({ loaded: offset, total: file.size, speed });
-    }
+    const worker = async () => {
+        for (let number = pending.shift(); number !== undefined; number = pending.shift()) {
+            await uploadPart(number);
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pending.length) }, worker));
 
     const data = await getCompleteData();
     const form = new FormData();

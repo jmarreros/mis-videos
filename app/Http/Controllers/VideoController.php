@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Media\MediaStorage;
 use App\Models\Video;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -63,11 +63,11 @@ class VideoController extends Controller
         ]);
 
         if ($video->thumbnail_path) {
-            Storage::delete($video->thumbnail_path);
+            MediaStorage::disk()->delete($video->thumbnail_path);
         }
 
         $file = $request->file('thumbnail');
-        $path = $file->storeAs('thumbnails', $video->ulid.'-'.time().'.'.$file->extension());
+        $path = $file->storeAs('thumbnails', $video->ulid.'-'.time().'.'.$file->extension(), MediaStorage::name());
 
         $video->update(['thumbnail_path' => $path]);
 

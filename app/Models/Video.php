@@ -2,12 +2,12 @@
 
 namespace App\Models;
 
+use App\Media\MediaStorage;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
 
 class Video extends Model
 {
@@ -61,6 +61,6 @@ class Video extends Model
 
     public function deleteFiles(): void
     {
-        Storage::delete(array_filter([$this->path, $this->thumbnail_path]));
+        MediaStorage::disk()->delete(array_filter([$this->path, $this->thumbnail_path]));
     }
 }

@@ -2,22 +2,22 @@
 
 namespace App\Console\Commands;
 
+use App\Media\MultipartUploader;
 use App\Models\Upload;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Storage;
 
 class PruneUploads extends Command
 {
     protected $signature = 'uploads:prune {--hours=24}';
 
-    protected $description = 'Elimina las subidas incompletas abandonadas';
+    protected $description = 'Cancela las subidas incompletas abandonadas y libera su espacio';
 
-    public function handle(): int
+    public function handle(MultipartUploader $uploader): int
     {
         $uploads = Upload::where('updated_at', '<', now()->subHours((int) $this->option('hours')))->get();
 
         foreach ($uploads as $upload) {
-            Storage::delete($upload->partPath());
+            $uploader->abort($upload);
             $upload->delete();
         }
 

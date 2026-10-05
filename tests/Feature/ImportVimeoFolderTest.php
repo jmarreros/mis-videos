@@ -146,6 +146,33 @@ class ImportVimeoFolderTest extends TestCase
         $this->assertSame(['parque Samir'], Video::pluck('title')->all());
     }
 
+    public function test_matches_files_by_vimeo_id_when_names_repeat(): void
+    {
+        Http::fake([
+            'api.vimeo.com/me/projects/300/videos*' => Http::response([
+                'data' => [
+                    $this->remote(21, 'Junio 2023', '2023-06-01T10:00:00+00:00'),
+                    $this->remote(22, 'Junio 2023', '2023-06-08T10:00:00+00:00'),
+                ],
+                'paging' => ['next' => null],
+            ]),
+            'api.vimeo.com/me/projects/300*' => Http::response([
+                'name' => 'Clases Salsa',
+                'metadata' => ['connections' => ['parent_folder' => null]],
+            ]),
+        ]);
+        $this->download('junio_2023 [21] (1080p).mp4', 'primero');
+        $this->download('junio_2023 [22] (720p).mp4', 'segundo');
+        $this->download('otro [99] (1080p).mp4');
+
+        $this->artisan('vimeo:import', ['folder' => '300', 'dir' => $this->dir])
+            ->expectsOutputToContain('Sin emparejar: otro [99] (1080p).mp4 (ningún video de la carpeta tiene ese id)')
+            ->assertFailed();
+
+        $this->assertSame('primero', Storage::disk('local')->get(Video::where('vimeo_id', 21)->sole()->path));
+        $this->assertSame('segundo', Storage::disk('local')->get(Video::where('vimeo_id', 22)->sole()->path));
+    }
+
     public function test_dry_run_uploads_nothing(): void
     {
         $this->download('parque_samir_v1 (1080p).mp4');

@@ -42,8 +42,15 @@ class VimeoClient
         $videos = [];
         $uri = "/me/projects/{$folderId}/videos";
         $query = ['per_page' => 100, 'fields' => 'uri,name,created_time,duration,width,height,pictures.sizes'];
+        $visited = [];
 
         while ($uri) {
+            // A page pointing back to one already read would loop until memory runs out
+            if (isset($visited[$uri])) {
+                throw new RuntimeException("Vimeo repitió la página {$uri} al paginar la carpeta {$folderId}.");
+            }
+            $visited[$uri] = true;
+
             $page = $this->get($uri, $query);
             $query = [];
 

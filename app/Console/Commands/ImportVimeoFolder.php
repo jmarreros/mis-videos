@@ -93,12 +93,15 @@ class ImportVimeoFolder extends Command
 
     /**
      * Vimeo names its downloads "<name in lowercase, spaces as _>[_v1] (1080p).mp4".
+     * A file named "<name> [<vimeo id>] (1080p).mp4" is matched by its id instead,
+     * which also works for videos that share a name.
      *
      * @param  array<int, array<string, mixed>>  $remote
      * @return array{0: array<string, array{file: string, video: array<string, mixed>}>, 1: array<string, string>, 2: array<int, array<string, mixed>>}
      */
     private function match(string $dir, array $remote): array
     {
+        $byId = collect($remote)->keyBy('id');
         $bySlug = collect($remote)->groupBy(fn (array $video) => self::slug($video['name']));
         $matched = [];
         $unmatched = [];
@@ -108,11 +111,17 @@ class ImportVimeoFolder extends Command
 
         foreach ($files as $file) {
             $base = preg_replace('/ \(\d+p\)$/', '', pathinfo($file, PATHINFO_FILENAME));
-            $candidates = array_unique([$base, preg_replace('/_v\d+$/', '', $base)]);
-            $found = collect($candidates)->map(fn (string $slug) => $bySlug->get($slug))->filter()->first();
+            $id = preg_match('/ \[(\d+)\]$/', $base, $match) ? $match[1] : null;
+
+            if ($id) {
+                $found = $byId->has($id) ? collect([$byId->get($id)]) : null;
+            } else {
+                $candidates = array_unique([$base, preg_replace('/_v\d+$/', '', $base)]);
+                $found = collect($candidates)->map(fn (string $slug) => $bySlug->get($slug))->filter()->first();
+            }
 
             if (! $found) {
-                $unmatched[$file] = 'ningún video de Vimeo tiene ese nombre';
+                $unmatched[$file] = $id ? 'ningún video de la carpeta tiene ese id' : 'ningún video de Vimeo tiene ese nombre';
             } elseif ($found->count() > 1) {
                 $unmatched[$file] = 'varios videos de Vimeo tienen ese nombre';
             } elseif (isset($used[$found->first()['id']])) {

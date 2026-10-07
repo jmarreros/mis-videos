@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Media\MediaStorage;
+use App\Media\Thumbnailer;
 use App\Models\Folder;
 use App\Models\Video;
 use Carbon\CarbonImmutable;
@@ -15,7 +16,8 @@ use Throwable;
 
 /**
  * Imports every video of a local folder into an app folder (e.g. "VDance/curso-54"),
- * reading duration and size with ffprobe and grabbing the thumbnail with ffmpeg.
+ * reading duration and size with ffprobe and grabbing the thumbnail from the
+ * middle of the video with ffmpeg (see Thumbnailer).
  * Files keep their alphabetical order in the library, which lists newest first,
  * so the first file gets the most recent date. Files already imported into that
  * folder (by original name) are skipped, so the command can be re-run safely.
@@ -172,7 +174,7 @@ class ImportVideoDir extends Command
                 fclose($stream);
             }
 
-            $thumbnail = $this->thumbnail($file, $meta['duration']);
+            $thumbnail = app(Thumbnailer::class)->grab($file, $meta['duration']);
 
             if ($thumbnail !== null) {
                 $thumbnailPath = "thumbnails/{$ulid}.jpg";
@@ -223,24 +225,5 @@ class ImportVideoDir extends Command
             'width' => $stream['width'] ?? null,
             'height' => $stream['height'] ?? null,
         ];
-    }
-
-    /**
-     * JPEG frame at the same point the upload page picks by default: 10% in, between 1 s and 30 s.
-     */
-    private function thumbnail(string $file, ?float $duration): ?string
-    {
-        $at = $duration ? min(max($duration * 0.1, min(1, $duration / 2)), 30) : 0;
-        $base = tempnam(sys_get_temp_dir(), 'thumb');
-        $target = "{$base}.jpg";
-
-        $result = Process::run(['ffmpeg', '-v', 'error', '-y', '-ss', (string) $at, '-i', $file,
-            '-frames:v', '1', '-vf', 'scale=min(1280\,iw):-2', '-q:v', '3', $target]);
-
-        $jpeg = $result->successful() && is_file($target) ? file_get_contents($target) : null;
-        @unlink($target);
-        @unlink($base);
-
-        return $jpeg ?: null;
     }
 }

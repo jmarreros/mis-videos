@@ -15,7 +15,7 @@ class Video extends Model
 
     protected $fillable = [
         'title', 'folder_id', 'vimeo_id', 'path', 'original_name', 'mime',
-        'size', 'duration', 'width', 'height', 'thumbnail_path',
+        'size', 'duration', 'width', 'height', 'thumbnail_path', 'completed_at', 'favorited_at',
     ];
 
     protected $hidden = ['path', 'thumbnail_path'];
@@ -29,6 +29,8 @@ class Video extends Model
             'duration' => 'float',
             'width' => 'integer',
             'height' => 'integer',
+            'completed_at' => 'datetime',
+            'favorited_at' => 'datetime',
         ];
     }
 

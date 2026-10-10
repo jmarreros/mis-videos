@@ -19,7 +19,7 @@ import { useVideoDrop } from '@/hooks/use-video-drop';
 import { cn } from '@/lib/utils';
 import { type SharedData } from '@/types';
 import { Link, router, usePage } from '@inertiajs/react';
-import { FolderPlus, Library, Search, Upload } from 'lucide-react';
+import { FolderPlus, Library, Search, Star, Upload } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 import AppLogo from './app-logo';
 
@@ -97,6 +97,14 @@ export function AppSidebar() {
                                 <Link href={route('library')} prefetch>
                                     <Library />
                                     <span>Inicio</span>
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton asChild tooltip="Favoritos" isActive={route().current('favorites')}>
+                                <Link href={route('favorites')} prefetch>
+                                    <Star />
+                                    <span>Favoritos</span>
                                 </Link>
                             </SidebarMenuButton>
                         </SidebarMenuItem>

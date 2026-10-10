@@ -3,8 +3,8 @@ import { setVideoDragData } from '@/hooks/use-video-drop';
 import { formatDate, formatDuration } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { type Video } from '@/types';
-import { Link } from '@inertiajs/react';
-import { Check, Film, FolderInput, MoreVertical, Pencil, Play, Trash2 } from 'lucide-react';
+import { Link, router } from '@inertiajs/react';
+import { Check, CircleCheck, Film, FolderInput, MoreVertical, Pencil, Play, Star, Trash2 } from 'lucide-react';
 
 interface Props {
     video: Video;
@@ -65,6 +65,12 @@ export function VideoCard({ video, selected, selecting, onToggleSelect, dragIds,
                         </div>
                     </div>
 
+                    {video.completed_at && (
+                        <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-md bg-emerald-600/90 px-1.5 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
+                            <CircleCheck className="size-3" /> Completado
+                        </span>
+                    )}
+
                     {video.duration ? (
                         <span className="absolute right-2 bottom-2 rounded-md bg-black/75 px-1.5 py-0.5 text-[11px] font-medium text-white tabular-nums backdrop-blur-sm">
                             {formatDuration(video.duration)}
@@ -72,6 +78,18 @@ export function VideoCard({ video, selected, selecting, onToggleSelect, dragIds,
                     ) : null}
                 </div>
             </Link>
+
+            <button
+                type="button"
+                onClick={() => router.patch(route('videos.favorite', video.ulid), { favorite: !video.favorited_at }, { preserveScroll: true, preserveState: true, onSuccess: () => router.flushAll() })}
+                aria-label={video.favorited_at ? 'Quitar de favoritos' : 'Añadir a favoritos'}
+                className={cn(
+                    'absolute top-2 right-2 flex size-7 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm transition-all hover:bg-black/60',
+                    video.favorited_at ? 'text-amber-400 opacity-100' : 'text-white opacity-0 group-hover:opacity-100',
+                )}
+            >
+                <Star className={cn('size-4', video.favorited_at && 'fill-amber-400')} />
+            </button>
 
             {onToggleSelect && (
                 <button

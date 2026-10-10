@@ -43,6 +43,28 @@ class VideoController extends Controller
         return back()->with('success', 'Video actualizado');
     }
 
+    public function completed(Request $request, Video $video): RedirectResponse
+    {
+        $data = $request->validate(['completed' => ['required', 'boolean']]);
+
+        // Keep updated_at untouched: it versions the thumbnail URL.
+        $video->timestamps = false;
+        $video->update(['completed_at' => $data['completed'] ? now() : null]);
+
+        return back()->with('success', $data['completed'] ? 'Video marcado como completado' : 'Video marcado como pendiente');
+    }
+
+    public function favorite(Request $request, Video $video): RedirectResponse
+    {
+        $data = $request->validate(['favorite' => ['required', 'boolean']]);
+
+        // Keep updated_at untouched: it versions the thumbnail URL.
+        $video->timestamps = false;
+        $video->update(['favorited_at' => $data['favorite'] ? now() : null]);
+
+        return back()->with('success', $data['favorite'] ? 'Añadido a favoritos' : 'Quitado de favoritos');
+    }
+
     public function move(Request $request): RedirectResponse
     {
         $data = $request->validate([

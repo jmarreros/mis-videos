@@ -31,6 +31,17 @@ class LibraryController extends Controller
         ]);
     }
 
+    public function favorites(): Response
+    {
+        return Inertia::render('library/favorites', [
+            'videos' => Video::query()
+                ->with('folder:id,name')
+                ->whereNotNull('favorited_at')
+                ->orderByDesc('favorited_at')
+                ->get(),
+        ]);
+    }
+
     public function search(Request $request): Response
     {
         $filters = $request->validate([

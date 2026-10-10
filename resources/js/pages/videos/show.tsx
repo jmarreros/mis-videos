@@ -7,8 +7,8 @@ import AppLayout from '@/layouts/app-layout';
 import { folderBreadcrumbs } from '@/lib/breadcrumbs';
 import { formatBytes, formatDate, formatDuration, formatResolution } from '@/lib/format';
 import { type FolderRef, type Video } from '@/types';
-import { Head, Link, useForm } from '@inertiajs/react';
-import { Calendar, Check, Clock, Download, Folder, FolderInput, HardDrive, Image, Library, Monitor, Pencil, Trash2, X } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Calendar, Check, CircleCheck, Clock, Download, Folder, FolderInput, HardDrive, Image, Library, Monitor, Pencil, Star, Trash2, X } from 'lucide-react';
 import { FormEvent, useRef, useState } from 'react';
 
 interface Props {
@@ -26,6 +26,12 @@ export default function VideoShow({ video, ancestors, related }: Props) {
 
     const breadcrumbs = [...folderBreadcrumbs(ancestors), { title: video.title, href: route('videos.show', video.ulid) }];
     const folderHref = video.folder ? route('folders.show', video.folder.id) : route('library');
+
+    const setCompleted = (completed: boolean) =>
+        router.patch(route('videos.completed', video.ulid), { completed }, { preserveScroll: true, preserveState: true, only: ['video', 'related', 'flash'], onSuccess: () => router.flushAll() });
+
+    const toggleFavorite = () =>
+        router.patch(route('videos.favorite', video.ulid), { favorite: !video.favorited_at }, { preserveScroll: true, preserveState: true, only: ['video', 'related', 'flash'], onSuccess: () => router.flushAll() });
 
     const saveTitle = (event: FormEvent) => {
         event.preventDefault();
@@ -53,6 +59,7 @@ export default function VideoShow({ video, ancestors, related }: Props) {
                         controls
                         crossOrigin="anonymous"
                         autoPlay
+                        onEnded={() => !video.completed_at && setCompleted(true)}
                         playsInline
                         preload="metadata"
                         className="mx-auto max-h-[75vh] w-full bg-black"
@@ -112,6 +119,12 @@ export default function VideoShow({ video, ancestors, related }: Props) {
                         </div>
 
                         <div className="flex flex-wrap gap-2">
+                            <Button variant={video.completed_at ? 'default' : 'secondary'} onClick={() => setCompleted(!video.completed_at)}>
+                                <CircleCheck /> {video.completed_at ? 'Completado' : 'Marcar como completado'}
+                            </Button>
+                            <Button variant="secondary" size="icon" onClick={toggleFavorite} title={video.favorited_at ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
+                                <Star className={video.favorited_at ? 'fill-amber-400 text-amber-400' : ''} />
+                            </Button>
                             <Button variant="secondary" onClick={() => actions.moveVideos([video.ulid], video.folder_id)}>
                                 <FolderInput /> Mover
                             </Button>

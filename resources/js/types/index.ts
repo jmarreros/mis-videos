@@ -71,6 +71,8 @@ export interface Video {
     height: number | null;
     stream_url: string;
     thumbnail_url: string | null;
+    completed_at: string | null;
+    favorited_at: string | null;
     created_at: string;
     updated_at: string;
 }

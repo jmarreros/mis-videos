@@ -12,6 +12,7 @@ use Inertia\Inertia;
 Route::middleware(['auth'])->group(function () {
     Route::get('/', [LibraryController::class, 'index'])->name('library');
     Route::get('folders/{folder}', [LibraryController::class, 'index'])->name('folders.show');
+    Route::get('favorites', [LibraryController::class, 'favorites'])->name('favorites');
     Route::get('search', [LibraryController::class, 'search'])->name('search');
 
     Route::post('folders', [FolderController::class, 'store'])->name('folders.store');
@@ -29,6 +30,8 @@ Route::middleware(['auth'])->group(function () {
     Route::post('videos/move', [VideoController::class, 'move'])->name('videos.move');
     Route::get('videos/{video}', [VideoController::class, 'show'])->name('videos.show');
     Route::patch('videos/{video}', [VideoController::class, 'update'])->name('videos.update');
+    Route::patch('videos/{video}/completed', [VideoController::class, 'completed'])->name('videos.completed');
+    Route::patch('videos/{video}/favorite', [VideoController::class, 'favorite'])->name('videos.favorite');
     Route::post('videos/{video}/thumbnail', [VideoController::class, 'thumbnail'])->name('videos.thumbnail');
     Route::delete('videos/{video}', [VideoController::class, 'destroy'])->name('videos.destroy');
 

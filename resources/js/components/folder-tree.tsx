@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { type FolderNode, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import { ChevronRight, Folder, FolderOpen } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const STORAGE_KEY = 'folder-tree:expanded';
 
@@ -78,6 +78,12 @@ function FolderTreeItem({ node, activeId, expanded, onToggle, depth }: ItemProps
     const isActive = node.id === activeId;
     const hasChildren = node.children.length > 0;
     const Icon = isActive || isOpen ? FolderOpen : Folder;
+    const rowRef = useRef<HTMLDivElement>(null);
+
+    // Keep the active folder visible in the (scrollable) sidebar after navigating.
+    useEffect(() => {
+        if (isActive) rowRef.current?.scrollIntoView({ block: 'nearest' });
+    }, [isActive]);
 
     const content = (
         <>
@@ -110,7 +116,7 @@ function FolderTreeItem({ node, activeId, expanded, onToggle, depth }: ItemProps
             {depth === 0 ? (
                 <SidebarMenuItem>
                     <SidebarMenuButton asChild isActive={isActive} className={dropClass} {...drop.handlers}>
-                        <div>
+                        <div ref={rowRef}>
                             {chevron}
                             {content}
                         </div>
@@ -120,7 +126,7 @@ function FolderTreeItem({ node, activeId, expanded, onToggle, depth }: ItemProps
             ) : (
                 <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={isActive} className={cn('pr-2', dropClass)} {...drop.handlers}>
-                        <div>
+                        <div ref={rowRef}>
                             {chevron}
                             {content}
                         </div>

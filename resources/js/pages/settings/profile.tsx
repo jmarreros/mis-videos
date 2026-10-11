@@ -14,7 +14,7 @@ import SettingsLayout from '@/layouts/settings/layout';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Perfil',
-        href: '/settings/profile',
+        href: route('profile.edit'),
     },
 ];
 

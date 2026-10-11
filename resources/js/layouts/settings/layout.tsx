@@ -8,18 +8,18 @@ import { Link } from '@inertiajs/react';
 const sidebarNavItems: NavItem[] = [
     {
         title: 'Perfil',
-        url: '/settings/profile',
+        url: route('profile.edit'),
         icon: null,
     },
     {
         title: 'Contraseña',
-        url: '/settings/password',
+        url: route('password.edit'),
         icon: null,
     },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
-    const currentPath = window.location.pathname;
+    const currentUrl = window.location.origin + window.location.pathname;
 
     return (
         <div className="px-4 py-6">
@@ -35,7 +35,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                                 variant="ghost"
                                 asChild
                                 className={cn('w-full justify-start', {
-                                    'bg-muted': currentPath === item.url,
+                                    'bg-muted': currentUrl === item.url,
                                 })}
                             >
                                 <Link href={item.url} prefetch>

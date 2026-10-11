@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Contraseña',
-        href: '/settings/password',
+        href: route('password.edit'),
     },
 ];
 

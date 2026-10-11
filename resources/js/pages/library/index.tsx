@@ -12,8 +12,8 @@ import AppLayout from '@/layouts/app-layout';
 import { folderBreadcrumbs } from '@/lib/breadcrumbs';
 import { type Folder, type FolderRef, type Video } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { ArrowDownUp, CheckSquare, FolderInput, FolderPlus, Library, MoreHorizontal, Pencil, Trash2, Upload } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ArrowDownUp, CheckSquare, FolderInput, FolderPlus, Library, MoreHorizontal, Pencil, Star, Trash2, Upload } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface Props {
     folder: Folder | null;
@@ -29,15 +29,22 @@ const sortLabels: Record<Sort, string> = { newest: 'MÃ¡s recientes', oldest: 'MÃ
 export default function LibraryIndex({ folder, ancestors, subfolders, videos }: Props) {
     const [creating, setCreating] = useState(false);
     const [sort, setSort] = useState<Sort>('newest');
-    const selection = useSelection(videos);
+    const [onlyFavorites, setOnlyFavorites] = useState(false);
+    const favoritesCount = useMemo(() => videos.filter((video) => video.favorited_at).length, [videos]);
+    const filterFavorites = onlyFavorites && favoritesCount > 0;
+    const visible = useMemo(() => (filterFavorites ? videos.filter((video) => video.favorited_at) : videos), [videos, filterFavorites]);
+    const selection = useSelection(visible);
     const actions = useLibraryActions({ onMoved: selection.clear });
 
+    // The filter is per folder: start unfiltered whenever we navigate elsewhere.
+    useEffect(() => setOnlyFavorites(false), [folder?.id]);
+
     const sorted = useMemo(() => {
-        const list = [...videos];
+        const list = [...visible];
         if (sort === 'oldest') list.reverse();
         if (sort === 'title') list.sort((a, b) => a.title.localeCompare(b.title, 'es', { numeric: true, sensitivity: 'base' }));
         return list;
-    }, [videos, sort]);
+    }, [visible, sort]);
 
     const breadcrumbs = folderBreadcrumbs(folder ? [...ancestors, folder] : []);
     const title = folder?.name ?? 'Biblioteca';
@@ -132,6 +139,13 @@ export default function LibraryIndex({ folder, ancestors, subfolders, videos }: 
                                 <div className="mb-4 flex items-center justify-between gap-2">
                                     <h2 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">Videos</h2>
                                     <div className="flex items-center gap-1">
+                                        {favoritesCount > 0 && (
+                                            <Button variant={filterFavorites ? 'secondary' : 'ghost'} size="sm" onClick={() => setOnlyFavorites(!filterFavorites)} aria-pressed={filterFavorites}>
+                                                <Star className={filterFavorites ? 'fill-amber-400 text-amber-400' : ''} />
+                                                <span className="hidden sm:inline">Favoritos</span>
+                                                <span className="text-muted-foreground tabular-nums">{favoritesCount}</span>
+                                            </Button>
+                                        )}
                                         <Button
                                             variant={selection.active ? 'secondary' : 'ghost'}
                                             size="sm"
@@ -179,7 +193,7 @@ export default function LibraryIndex({ folder, ancestors, subfolders, videos }: 
 
             <SelectionBar
                 count={selection.ids.length}
-                total={videos.length}
+                total={visible.length}
                 onSelectAll={selection.selectAll}
                 onClear={selection.clear}
                 onMove={() => actions.moveVideos(selection.ids, folder?.id ?? null)}

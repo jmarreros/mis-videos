@@ -21,6 +21,11 @@ Cómo funciona una app Laravel en subcarpeta (`apps/mis-videos.conf`):
 - `fastcgi_param SCRIPT_NAME /mis-videos/index.php`: con eso Laravel detecta solo que su base es
   `/mis-videos` y genera bien `route()`, `url()`, redirecciones y Ziggy.
 
+Mis Videos es una **PWA** (`public/manifest.webmanifest`, `public/sw.js`, `public/icons/`). El `manifest` usa
+rutas relativas y el service worker se sirve desde `/mis-videos/sw.js`, así que su alcance es sólo la subcarpeta.
+Nginx necesita el `location = /mis-videos/manifest.webmanifest` de `apps/mis-videos.conf` para entregarlo como
+`application/manifest+json`. Al desplegar otra app con PWA, replicar ese bloque con su nombre.
+
 ## Requisitos de la app para vivir en una subcarpeta
 
 En el `.env` del servidor:

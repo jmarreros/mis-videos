@@ -111,6 +111,7 @@ Sin acceso SSH puedes ejecutar los comandos `artisan` desde la terminal del pane
 
 ## Notas
 
+- **PWA:** se puede instalar desde el navegador (Chrome: icono de instalar en la barra; iOS: Compartir → «Añadir a pantalla de inicio»). Hay `public/manifest.webmanifest`, `public/sw.js` (sólo cachea `/build/`; páginas y videos van siempre a la red) e íconos en `public/icons/`. Requiere HTTPS. En nginx el manifest debe servirse como `application/manifest+json` (ver `docs/despliegue/`).
 - **Miniaturas:** se generan en el navegador (canvas), así que el servidor no necesita FFmpeg. Al subir un video eliges el fotograma con un deslizador o subes una imagen. Después puedes cambiarla desde el reproductor («Miniatura» → «Fotograma actual»).
 - **Formatos:** el navegador reproduce MP4 (H.264/AAC) y WebM. Los MOV de iPhone en H.264 también suelen funcionar. MKV y AVI se pueden guardar y descargar, pero quizá no se reproduzcan en el navegador.
 - **Reanudar subidas:** si se interrumpe una subida, vuelve a elegir el mismo archivo y continuará desde donde se quedó.

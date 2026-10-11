@@ -18,6 +18,14 @@ createInertiaApp({
         const root = createRoot(el);
 
         root.render(<App {...props} />);
+
+        const splash = document.getElementById('splash');
+        if (splash) {
+            requestAnimationFrame(() => {
+                splash.classList.add('hide');
+                setTimeout(() => splash.remove(), 300);
+            });
+        }
     },
     progress: {
         color: '#4B5563',

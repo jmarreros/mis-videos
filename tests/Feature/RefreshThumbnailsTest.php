@@ -39,6 +39,10 @@ class RefreshThumbnailsTest extends TestCase
      */
     private function videoWithWhiteIntro(Folder $folder, string $title): Video
     {
+        if (! Process::run(['ffmpeg', '-version'])->successful()) {
+            $this->markTestSkipped('ffmpeg no está instalado.');
+        }
+
         $file = "{$this->dir}/{$title}.mp4";
         Process::run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=white:size=320x180:rate=10:duration=1',
             '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=10:duration=3',

@@ -36,6 +36,10 @@ class ImportVideoDirTest extends TestCase
 
     private function video(string $name): void
     {
+        if (! Process::run(['ffmpeg', '-version'])->successful()) {
+            $this->markTestSkipped('ffmpeg no está instalado.');
+        }
+
         Process::run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=10:duration=2',
             '-pix_fmt', 'yuv420p', "{$this->dir}/{$name}"])->throw();
     }
